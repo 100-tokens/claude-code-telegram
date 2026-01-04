@@ -409,7 +409,11 @@ async def telegram_progress(
     time_since_update = current_time - last_update
 
     # Allow update if: first update, 100% complete, or enough time elapsed
-    if last_update > 0 and percent < 100 and time_since_update < PROGRESS_UPDATE_INTERVAL:
+    if (
+        last_update > 0
+        and percent < 100
+        and time_since_update < PROGRESS_UPDATE_INTERVAL
+    ):
         logger.debug(
             "Skipping progress update (rate limited)",
             percent=percent,
@@ -417,7 +421,10 @@ async def telegram_progress(
         )
         return {
             "content": [
-                {"type": "text", "text": f"Progress: {percent}% (update skipped - rate limited)"}
+                {
+                    "type": "text",
+                    "text": f"Progress: {percent}% (update skipped - rate limited)",
+                }
             ],
         }
 

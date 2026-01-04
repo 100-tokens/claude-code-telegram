@@ -35,9 +35,10 @@ aiofiles = "^24.1.0"
 aiosqlite = "^0.21.0"
 anthropic = "^0.40.0"
 claude-agent-sdk = "^0.1.17"
+click = "^8.1.0"
 
 [tool.poetry.scripts]
-claude-telegram-bot = "src.main:run"
+claude-telegram-bot = "src.cli.commands:main"
 
 [build-system]
 requires = ["poetry-core>=2.0.0"]

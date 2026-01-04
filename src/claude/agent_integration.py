@@ -33,10 +33,10 @@ SDK_TYPE = "none"
 
 try:
     from claude_agent_sdk import (
-        CLIJSONDecodeError,
-        CLINotFoundError,
         ClaudeAgentOptions,
         ClaudeSDKClient,
+        CLIJSONDecodeError,
+        CLINotFoundError,
         ProcessError,
     )
 
@@ -344,7 +344,9 @@ class AgentIntegration:
             # Log tool usage for monitoring
             if hasattr(msg, "tool_use"):
                 tool_name = getattr(msg.tool_use, "name", "unknown")
-                logger.debug("Tool execution in progress", tool=tool_name, user_id=user_id)
+                logger.debug(
+                    "Tool execution in progress", tool=tool_name, user_id=user_id
+                )
 
             # Convert to dict format
             response = self._convert_message_to_dict(msg)
