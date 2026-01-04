@@ -27,6 +27,7 @@ jobs:
         uses: qodo-ai/pr-agent@main
         env:
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          OPENROUTER__KEY: ${{ secrets.OPENROUTER_API_KEY }}
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
           # Model configuration - Gemini 3 Flash Preview via OpenRouter
