@@ -9,7 +9,7 @@ Features:
 
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Dict, List, Optional, Union
 
@@ -44,12 +44,17 @@ class ClaudeSession:
 
     def is_expired(self, timeout_hours: int) -> bool:
         """Check if session has expired."""
-        age = datetime.utcnow() - self.last_used
+        now = datetime.now(timezone.utc)
+        # Handle both naive and aware datetimes for backwards compatibility
+        last_used = self.last_used
+        if last_used.tzinfo is None:
+            last_used = last_used.replace(tzinfo=timezone.utc)
+        age = now - last_used
         return age > timedelta(hours=timeout_hours)
 
     def update_usage(self, response: ClaudeResponse) -> None:
         """Update session with usage from response."""
-        self.last_used = datetime.utcnow()
+        self.last_used = datetime.now(timezone.utc)
         self.total_cost += response.cost
         self.total_turns += response.num_turns
         self.message_count += 1

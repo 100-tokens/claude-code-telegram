@@ -568,10 +568,14 @@ class AgentIntegration:
             logger.info("Closed SDK client session", user_id=user_id)
 
     async def close_all(self) -> None:
-        """Close all active sessions."""
+        """Close all active sessions concurrently."""
         user_ids = list(self.clients.keys())
-        for user_id in user_ids:
-            await self.close_session(user_id)
+        if user_ids:
+            # Close all sessions concurrently for faster shutdown
+            await asyncio.gather(
+                *(self.close_session(uid) for uid in user_ids),
+                return_exceptions=True,
+            )
         logger.info("Closed all SDK client sessions", count=len(user_ids))
 
     def get_active_session_count(self) -> int:

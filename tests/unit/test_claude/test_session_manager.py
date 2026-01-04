@@ -4,7 +4,7 @@ These tests verify session lifecycle, interrupt handling, and
 integration with the Claude Agent SDK.
 """
 
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -77,8 +77,8 @@ class TestSessionLifecycle:
             session_id="test-123",
             user_id=12345,
             project_path=Path("/test"),
-            created_at=datetime.utcnow() - timedelta(hours=25),
-            last_used=datetime.utcnow() - timedelta(hours=25),
+            created_at=datetime.now(timezone.utc) - timedelta(hours=25),
+            last_used=datetime.now(timezone.utc) - timedelta(hours=25),
         )
 
         # Session should be expired with 24 hour timeout

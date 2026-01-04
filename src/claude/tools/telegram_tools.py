@@ -4,6 +4,7 @@ These tools enable Claude to send rich Telegram responses including
 inline keyboards, file attachments, progress updates, and formatted messages.
 """
 
+import contextvars
 import io
 from typing import Any, Dict, List, Optional, Union
 
@@ -134,8 +135,10 @@ class TelegramToolContext:
             return None
 
 
-# Global context storage (set by facade before query)
-_current_context: Optional[TelegramToolContext] = None
+# Thread-safe context storage using ContextVar (safe for async/concurrent requests)
+_current_context: contextvars.ContextVar[Optional[TelegramToolContext]] = (
+    contextvars.ContextVar("telegram_context", default=None)
+)
 
 
 def set_telegram_context(context: TelegramToolContext) -> None:
@@ -144,8 +147,7 @@ def set_telegram_context(context: TelegramToolContext) -> None:
     Args:
         context: TelegramToolContext instance
     """
-    global _current_context
-    _current_context = context
+    _current_context.set(context)
 
 
 def get_telegram_context() -> Optional[TelegramToolContext]:
@@ -154,7 +156,7 @@ def get_telegram_context() -> Optional[TelegramToolContext]:
     Returns:
         Current context or None
     """
-    return _current_context
+    return _current_context.get()
 
 
 @register_tool(
@@ -216,8 +218,11 @@ async def telegram_keyboard(
         for row in buttons:
             keyboard_row = []
             for btn_text in row:
+                # Ensure callback_data is within 64 bytes (Telegram limit)
+                # even with multi-byte characters like emojis
+                cb_data = btn_text.encode("utf-8")[:64].decode("utf-8", "ignore")
                 keyboard_row.append(
-                    InlineKeyboardButton(btn_text, callback_data=btn_text[:64])
+                    InlineKeyboardButton(btn_text, callback_data=cb_data)
                 )
             keyboard.append(keyboard_row)
 
