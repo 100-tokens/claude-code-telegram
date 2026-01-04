@@ -1,6 +1,7 @@
 """High-level Claude Code integration facade.
 
 Provides simple interface for bot handlers.
+Supports both legacy SDK and new Agent SDK integration.
 """
 
 from pathlib import Path
@@ -9,6 +10,9 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import structlog
 
 from ..config.settings import Settings
+from .agent_integration import AgentIntegration
+from .agent_integration import StreamUpdate as AgentStreamUpdate
+from .commands.executor import CommandExecutor, is_slash_command
 from .exceptions import ClaudeToolValidationError
 from .integration import ClaudeProcessManager, ClaudeResponse, StreamUpdate
 from .monitor import ToolMonitor
@@ -19,34 +23,74 @@ logger = structlog.get_logger()
 
 
 class ClaudeIntegration:
-    """Main integration point for Claude Code."""
+    """Main integration point for Claude Code.
+
+    Supports three execution modes:
+    1. AgentIntegration (new claude-agent-sdk) - preferred
+    2. ClaudeSDKManager (legacy claude-code-sdk) - fallback
+    3. ClaudeProcessManager (subprocess) - final fallback
+    """
 
     def __init__(
         self,
         config: Settings,
         process_manager: Optional[ClaudeProcessManager] = None,
         sdk_manager: Optional[ClaudeSDKManager] = None,
+        agent_integration: Optional[AgentIntegration] = None,
         session_manager: Optional[SessionManager] = None,
         tool_monitor: Optional[ToolMonitor] = None,
+        telegram_context: Optional[Any] = None,
     ):
-        """Initialize Claude integration facade."""
-        self.config = config
+        """Initialize Claude integration facade.
 
-        # Initialize both managers for fallback capability
+        Args:
+            config: Application settings
+            process_manager: Optional subprocess manager (legacy)
+            sdk_manager: Optional SDK manager (legacy claude-code-sdk)
+            agent_integration: Optional Agent integration (new claude-agent-sdk)
+            session_manager: Session management
+            tool_monitor: Tool monitoring and validation
+            telegram_context: Telegram context for custom tools
+        """
+        self.config = config
+        self.telegram_context = telegram_context
+
+        # Initialize new Agent SDK integration (preferred)
+        self.agent_integration = agent_integration or AgentIntegration(
+            config=config,
+            telegram_context=telegram_context,
+        )
+
+        # Initialize legacy managers for fallback capability
         self.sdk_manager = (
             sdk_manager or ClaudeSDKManager(config) if config.use_sdk else None
         )
         self.process_manager = process_manager or ClaudeProcessManager(config)
 
-        # Use SDK by default if configured
-        if config.use_sdk:
+        # Use Agent SDK by default if available, else legacy SDK, else subprocess
+        if self.agent_integration.is_sdk_available:
+            self.manager = self.agent_integration
+            logger.info(
+                "Using Agent SDK integration",
+                sdk_type=self.agent_integration.sdk_type,
+            )
+        elif config.use_sdk and self.sdk_manager:
             self.manager = self.sdk_manager
+            logger.info("Using legacy SDK manager")
         else:
             self.manager = self.process_manager
+            logger.info("Using subprocess manager")
 
         self.session_manager = session_manager
         self.tool_monitor = tool_monitor
         self._sdk_failed_count = 0  # Track SDK failures for adaptive fallback
+
+        # Initialize command executor for slash commands
+        self.command_executor = (
+            CommandExecutor(config.approved_directory / ".claude" / "commands")
+            if config.enable_slash_commands
+            else None
+        )
 
     async def run_command(
         self,
@@ -57,6 +101,36 @@ class ClaudeIntegration:
         on_stream: Optional[Callable[[StreamUpdate], None]] = None,
     ) -> ClaudeResponse:
         """Run Claude Code command with full integration."""
+        # Process slash commands if enabled
+        if self.command_executor and is_slash_command(prompt):
+            logger.info(
+                "Processing slash command",
+                user_id=user_id,
+                prompt_preview=prompt[:50],
+            )
+
+            result = await self.command_executor.process_message(prompt, user_id)
+
+            if result["error"]:
+                # Return error as ClaudeResponse
+                return ClaudeResponse(
+                    content=result["error"],
+                    session_id=session_id or "",
+                    cost=0.0,
+                    duration_ms=0,
+                    num_turns=0,
+                    is_error=True,
+                    error_type="command_error",
+                )
+
+            # Use expanded prompt
+            prompt = result["expanded_prompt"]
+            logger.info(
+                "Expanded slash command",
+                command=result["command"],
+                expanded_length=len(prompt),
+            )
+
         logger.info(
             "Running Claude command",
             user_id=user_id,
@@ -232,69 +306,108 @@ class ClaudeIntegration:
         continue_session: bool = False,
         stream_callback: Optional[Callable] = None,
     ) -> ClaudeResponse:
-        """Execute command with SDK->subprocess fallback on JSON decode errors."""
-        # Try SDK first if configured
-        if self.config.use_sdk and self.sdk_manager:
+        """Execute command with Agent SDK as primary, subprocess as fallback."""
+        # Use Agent SDK if available (preferred)
+        if self.agent_integration and self.agent_integration.is_sdk_available:
             try:
-                logger.debug("Attempting Claude SDK execution")
-                response = await self.sdk_manager.execute_command(
+                logger.debug("Attempting Agent SDK execution")
+
+                # Collect response from async generator
+                content_parts = []
+                tools_used = []
+                final_session_id = session_id or ""
+                cost = 0.0
+
+                # Convert stream callback for agent integration
+                async def agent_stream_handler(update: AgentStreamUpdate):
+                    if stream_callback:
+                        # Convert AgentStreamUpdate to legacy StreamUpdate
+                        legacy_update = StreamUpdate(
+                            content=update.content or "",
+                            tool_calls=[{"name": update.tool_name, "input": update.tool_input}]
+                            if update.tool_name else [],
+                        )
+                        try:
+                            result = stream_callback(legacy_update)
+                            if hasattr(result, "__await__"):
+                                await result
+                        except Exception as e:
+                            logger.warning("Stream callback failed", error=str(e))
+
+                # Query agent integration
+                async for response in self.agent_integration.query(
+                    user_id=0,  # Will be set by session manager
                     prompt=prompt,
-                    working_directory=working_directory,
-                    session_id=session_id,
-                    continue_session=continue_session,
-                    stream_callback=stream_callback,
-                )
-                # Reset failure count on success
+                    stream_callback=agent_stream_handler,
+                ):
+                    if response.get("type") == "text":
+                        content_parts.append(response.get("content", ""))
+                    elif response.get("type") == "tool_use":
+                        tools_used.append({
+                            "name": response.get("tool_name"),
+                            "input": response.get("tool_input"),
+                        })
+                    elif response.get("type") == "complete":
+                        cost = response.get("cost", 0.0)
+                        if response.get("session_id"):
+                            final_session_id = response.get("session_id")
+                    elif response.get("type") == "error":
+                        # Return error response
+                        return ClaudeResponse(
+                            content=response.get("content", "Unknown error"),
+                            session_id=final_session_id,
+                            cost=0.0,
+                            duration_ms=0,
+                            num_turns=0,
+                            is_error=True,
+                            error_type=response.get("error_type", "agent_error"),
+                        )
+
+                # Build final response
                 self._sdk_failed_count = 0
-                return response
+                return ClaudeResponse(
+                    content="\n".join(content_parts) if content_parts else "",
+                    session_id=final_session_id,
+                    cost=cost,
+                    duration_ms=0,
+                    num_turns=1,
+                    is_error=False,
+                    tools_used=tools_used,
+                )
 
             except Exception as e:
                 error_str = str(e)
-                # Check if this is a JSON decode error that indicates SDK issues
-                if (
-                    "Failed to decode JSON" in error_str
-                    or "JSON decode error" in error_str
-                    or "TaskGroup" in error_str
-                    or "ExceptionGroup" in error_str
-                ):
-                    self._sdk_failed_count += 1
-                    logger.warning(
-                        "Claude SDK failed with JSON/TaskGroup error, falling back to subprocess",
-                        error=error_str,
-                        failure_count=self._sdk_failed_count,
-                        error_type=type(e).__name__,
+                self._sdk_failed_count += 1
+                logger.warning(
+                    "Agent SDK failed, falling back to subprocess",
+                    error=error_str,
+                    failure_count=self._sdk_failed_count,
+                    error_type=type(e).__name__,
+                )
+
+                # Use subprocess fallback
+                try:
+                    logger.info("Executing with subprocess fallback")
+                    response = await self.process_manager.execute_command(
+                        prompt=prompt,
+                        working_directory=working_directory,
+                        session_id=session_id,
+                        continue_session=continue_session,
+                        stream_callback=stream_callback,
                     )
+                    logger.info("Subprocess fallback succeeded")
+                    return response
 
-                    # Use subprocess fallback
-                    try:
-                        logger.info("Executing with subprocess fallback")
-                        response = await self.process_manager.execute_command(
-                            prompt=prompt,
-                            working_directory=working_directory,
-                            session_id=session_id,
-                            continue_session=continue_session,
-                            stream_callback=stream_callback,
-                        )
-                        logger.info("Subprocess fallback succeeded")
-                        return response
-
-                    except Exception as fallback_error:
-                        logger.error(
-                            "Both SDK and subprocess failed",
-                            sdk_error=error_str,
-                            subprocess_error=str(fallback_error),
-                        )
-                        # Re-raise the original SDK error since it was the primary method
-                        raise e
-                else:
-                    # For non-JSON errors, re-raise immediately
+                except Exception as fallback_error:
                     logger.error(
-                        "Claude SDK failed with non-JSON error", error=error_str
+                        "Both Agent SDK and subprocess failed",
+                        sdk_error=error_str,
+                        subprocess_error=str(fallback_error),
                     )
-                    raise
+                    raise e
         else:
-            # Use subprocess directly if SDK not configured
-            logger.debug("Using subprocess execution (SDK disabled)")
+            # Use subprocess directly if Agent SDK not available
+            logger.debug("Using subprocess execution (Agent SDK not available)")
             return await self.process_manager.execute_command(
                 prompt=prompt,
                 working_directory=working_directory,
@@ -389,8 +502,13 @@ class ClaudeIntegration:
         """Shutdown integration and cleanup resources."""
         logger.info("Shutting down Claude integration")
 
-        # Kill any active processes
-        await self.manager.kill_all_processes()
+        # Close Agent SDK sessions
+        if self.agent_integration:
+            await self.agent_integration.close_all()
+
+        # Kill any active processes (legacy managers)
+        if hasattr(self.manager, "kill_all_processes"):
+            await self.manager.kill_all_processes()
 
         # Clean up expired sessions
         await self.cleanup_expired_sessions()

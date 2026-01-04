@@ -1,5 +1,8 @@
 """Claude Code Python SDK integration.
 
+DEPRECATED: This module is deprecated. Use agent_integration.py with claude-agent-sdk instead.
+This file is retained for backward compatibility during migration.
+
 Features:
 - Native Claude Code SDK integration
 - Async streaming support
@@ -7,31 +10,60 @@ Features:
 - Session persistence
 """
 
+import warnings
+
+warnings.warn(
+    "sdk_integration is deprecated, use agent_integration instead",
+    DeprecationWarning,
+    stacklevel=2,
+)
+
 import asyncio
 import os
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, AsyncIterator, Callable, Dict, List, Optional
+from typing import TYPE_CHECKING, Any, AsyncIterator, Callable, Dict, List, Optional
 
 import structlog
-from claude_code_sdk import (
-    ClaudeCodeOptions,
-    ClaudeSDKError,
-    CLIConnectionError,
-    CLINotFoundError,
-    Message,
-    ProcessError,
-    query,
-)
-from claude_code_sdk.types import (
-    AssistantMessage,
-    ResultMessage,
-    TextBlock,
-    ToolResultBlock,
-    ToolUseBlock,
-    UserMessage,
-)
+
+# Conditional imports - claude_code_sdk may not be installed
+SDK_AVAILABLE = False
+try:
+    from claude_code_sdk import (
+        ClaudeCodeOptions,
+        ClaudeSDKError,
+        CLIConnectionError,
+        CLINotFoundError,
+        Message,
+        ProcessError,
+        query,
+    )
+    from claude_code_sdk.types import (
+        AssistantMessage,
+        ResultMessage,
+        TextBlock,
+        ToolResultBlock,
+        ToolUseBlock,
+        UserMessage,
+    )
+
+    SDK_AVAILABLE = True
+except ImportError:
+    # SDK not available - create stub classes for type hints
+    ClaudeCodeOptions = None  # type: ignore
+    ClaudeSDKError = Exception  # type: ignore
+    CLIConnectionError = Exception  # type: ignore
+    CLINotFoundError = Exception  # type: ignore
+    Message = None  # type: ignore
+    ProcessError = Exception  # type: ignore
+    query = None  # type: ignore
+    AssistantMessage = None  # type: ignore
+    ResultMessage = None  # type: ignore
+    TextBlock = None  # type: ignore
+    ToolResultBlock = None  # type: ignore
+    ToolUseBlock = None  # type: ignore
+    UserMessage = None  # type: ignore
 
 from ..config.settings import Settings
 from .exceptions import (
@@ -160,6 +192,19 @@ class ClaudeSDKManager:
         stream_callback: Optional[Callable[[StreamUpdate], None]] = None,
     ) -> ClaudeResponse:
         """Execute Claude Code command via SDK."""
+        # Check if SDK is available
+        if not SDK_AVAILABLE:
+            logger.warning("claude_code_sdk not available, returning stub response")
+            return ClaudeResponse(
+                content="[SDK not available] claude_code_sdk is not installed. Use agent_integration instead.",
+                session_id=session_id or str(uuid.uuid4()),
+                cost=0.0,
+                duration_ms=0,
+                num_turns=0,
+                is_error=True,
+                error_type="sdk_unavailable",
+            )
+
         start_time = asyncio.get_event_loop().time()
 
         logger.info(

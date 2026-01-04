@@ -768,6 +768,85 @@ async def end_session(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     logger.info("Session ended by user", user_id=user_id, session_id=claude_session_id)
 
 
+async def stop_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Handle /stop command to interrupt an active conversation.
+
+    This command stops any in-progress Claude query and allows the user
+    to regain control of the conversation.
+    """
+    user_id = update.effective_user.id
+    audit_logger: AuditLogger = context.bot_data.get("audit_logger")
+
+    # Try to get conversation manager
+    try:
+        from ...claude.conversation import get_conversation_manager
+
+        conversation_manager = get_conversation_manager()
+
+        if conversation_manager and conversation_manager.is_conversation_active(
+            user_id
+        ):
+            # Stop the active conversation
+            stopped = await conversation_manager.stop_conversation(user_id)
+
+            if stopped:
+                await update.message.reply_text(
+                    "🛑 **Conversation Stopped**\n\n"
+                    "The current Claude query has been interrupted.\n\n"
+                    "**What you can do:**\n"
+                    "• Send a new message to start fresh\n"
+                    "• Use `/new` for a new session\n"
+                    "• Use `/status` to check your session",
+                    parse_mode="Markdown",
+                )
+
+                logger.info("Conversation stopped by user", user_id=user_id)
+
+                if audit_logger:
+                    await audit_logger.log_command(
+                        user_id=user_id,
+                        command="stop",
+                        args=[],
+                        success=True,
+                    )
+                return
+
+        # No active conversation found
+        await update.message.reply_text(
+            "ℹ️ **No Active Query**\n\n"
+            "There's no Claude query in progress to stop.\n\n"
+            "**What you can do:**\n"
+            "• Send a message to start a conversation\n"
+            "• Use `/status` to check your session\n"
+            "• Use `/end` to end the current session",
+            parse_mode="Markdown",
+        )
+
+    except ImportError:
+        # Conversation manager not available
+        await update.message.reply_text(
+            "ℹ️ **Stop Command**\n\n"
+            "Conversation interrupt is not available.\n"
+            "Use `/end` to end your current session.",
+            parse_mode="Markdown",
+        )
+
+    except Exception as e:
+        logger.error("Error in stop command", error=str(e), user_id=user_id)
+        await update.message.reply_text(
+            "❌ **Error**\n\n" f"Failed to stop conversation: {str(e)}",
+            parse_mode="Markdown",
+        )
+
+        if audit_logger:
+            await audit_logger.log_command(
+                user_id=user_id,
+                command="stop",
+                args=[],
+                success=False,
+            )
+
+
 async def quick_actions(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /actions command to show quick actions."""
     user_id = update.effective_user.id

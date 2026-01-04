@@ -13,6 +13,7 @@ import structlog
 from src import __version__
 from src.bot.core import ClaudeCodeBot
 from src.claude import (
+    AgentIntegration,
     ClaudeIntegration,
     ClaudeProcessManager,
     SessionManager,
@@ -132,21 +133,33 @@ async def create_application(config: Settings) -> Dict[str, Any]:
     session_manager = SessionManager(config, session_storage)
     tool_monitor = ToolMonitor(config, security_validator)
 
-    # Create Claude manager based on configuration
+    # Create Agent SDK integration (new preferred method)
+    agent_integration = AgentIntegration(config=config, telegram_context=None)
+    await agent_integration.initialize()
+
+    # Create legacy managers for fallback capability
     if config.use_sdk:
-        logger.info("Using Claude Python SDK integration")
+        logger.info("Using Claude SDK integration")
         sdk_manager = ClaudeSDKManager(config)
-        process_manager = None
+        process_manager = ClaudeProcessManager(config)
     else:
         logger.info("Using Claude CLI subprocess integration")
         process_manager = ClaudeProcessManager(config)
         sdk_manager = None
+
+    # Log which SDK is being used
+    logger.info(
+        "SDK integration initialized",
+        sdk_type=agent_integration.sdk_type,
+        sdk_available=agent_integration.is_sdk_available,
+    )
 
     # Create main Claude integration facade
     claude_integration = ClaudeIntegration(
         config=config,
         process_manager=process_manager,
         sdk_manager=sdk_manager,
+        agent_integration=agent_integration,
         session_manager=session_manager,
         tool_monitor=tool_monitor,
     )

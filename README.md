@@ -1,7 +1,7 @@
 # Claude Code Telegram Bot 🤖
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10+-blue.svg)](https://www.python.org/downloads/)
 
 A powerful Telegram bot that provides remote access to [Claude Code](https://claude.ai/code), enabling developers to interact with their projects from anywhere. Transform your phone into a development terminal with full Claude AI assistance, project navigation, and session persistence.
 
@@ -106,7 +106,7 @@ This project is actively being developed. Here's the current status of features:
 
 ### Prerequisites
 
-- **Python 3.9+** - [Download here](https://www.python.org/downloads/)
+- **Python 3.10+** - [Download here](https://www.python.org/downloads/)
 - **Poetry** - Modern Python dependency management
 - **Claude Code CLI** - [Install from here](https://claude.ai/code)
 - **Telegram Bot Token** - Get one from [@BotFather](https://t.me/botfather)
@@ -491,7 +491,7 @@ make run-debug     # Run bot in debug mode
 
 ### Code Standards
 
-- **Python 3.9+** with type hints
+- **Python 3.10+** with type hints
 - **Black** formatting (88 char line length)
 - **pytest** for testing with >85% coverage
 - **mypy** for static type checking
