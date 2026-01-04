@@ -497,6 +497,94 @@ make run-debug     # Run bot in debug mode
 - **mypy** for static type checking
 - **Conventional commits** for commit messages
 
+## 🤖 AI-Assisted Development
+
+This project uses AI-powered tools to streamline the development workflow and ensure code quality.
+
+### Spec-Driven Development (spec-kit)
+
+We use [spec-kit](https://github.com/github/spec-kit) for structured feature development. This ensures features are well-specified before implementation begins.
+
+**Workflow Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `/speckit.specify` | Create feature specification from description |
+| `/speckit.clarify` | Ask clarification questions for underspecified areas |
+| `/speckit.plan` | Generate implementation plan from spec |
+| `/speckit.tasks` | Generate actionable task breakdown |
+| `/speckit.implement` | Execute implementation tasks |
+| `/speckit.analyze` | Cross-artifact consistency analysis |
+
+**Example workflow:**
+```bash
+# 1. Define what you want to build
+/speckit.specify "Add user preferences for notification settings"
+
+# 2. Plan the implementation
+/speckit.plan
+
+# 3. Generate tasks
+/speckit.tasks
+
+# 4. Implement
+/speckit.implement
+```
+
+### Iterative Development (ralph-wiggum)
+
+For complex tasks requiring multiple iterations, use the [ralph-wiggum](https://github.com/anthropics/claude-code/tree/main/plugins/ralph-wiggum) plugin. It creates continuous improvement loops until a task is complete.
+
+**Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `/ralph-loop "<prompt>" --max-iterations N` | Start iterative loop |
+| `/cancel-ralph` | Cancel active loop |
+| `/help` | Plugin help |
+
+**When to use:**
+- Complex refactoring tasks
+- Multi-step bug investigations
+- Tasks requiring trial and error
+- Comprehensive code reviews
+
+**Example:**
+```bash
+/ralph-loop "Optimize database queries until all tests pass and response time < 100ms" --max-iterations 10 --completion-promise "OPTIMIZED"
+```
+
+### Automated PR Reviews (PR-Agent)
+
+All pull requests are automatically reviewed using [PR-Agent](https://github.com/qodo-ai/pr-agent) with Gemini 3 Flash via OpenRouter.
+
+**Automatic Features:**
+- **Auto-Review**: Security-focused code review on PR creation
+- **Auto-Describe**: AI-generated PR descriptions
+- **Auto-Improve**: Code improvement suggestions
+
+**PR Comment Commands:**
+
+| Command | Description |
+|---------|-------------|
+| `/review` | Request AI code review |
+| `/describe` | Generate PR description |
+| `/improve` | Get code improvement suggestions |
+| `/ask <question>` | Ask a question about the PR |
+
+### Project Constitution
+
+Our development is guided by 6 core principles defined in [`.specify/memory/constitution.md`](.specify/memory/constitution.md):
+
+1. **🔐 Security-First Design** - Defense-in-depth security for all features; authentication, sandboxing, and audit logging are non-negotiable
+2. **⚡ Async-First Architecture** - All I/O operations use async/await; no blocking calls allowed
+3. **🏗️ Clean Separation of Concerns** - Layered architecture (bot/claude/security/storage/config)
+4. **🧪 Test-First Development** - 80%+ test coverage for security modules; tests before implementation
+5. **👤 User Experience Focus** - Clear error messages, progress indicators, familiar terminal patterns
+6. **💰 Defensive Cost Management** - Per-user limits, session timeouts, cost tracking
+
+**Version**: 1.0.0 | [View Full Constitution](.specify/memory/constitution.md)
+
 ## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
