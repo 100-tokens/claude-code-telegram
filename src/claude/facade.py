@@ -324,8 +324,11 @@ class ClaudeIntegration:
                         # Convert AgentStreamUpdate to legacy StreamUpdate
                         legacy_update = StreamUpdate(
                             content=update.content or "",
-                            tool_calls=[{"name": update.tool_name, "input": update.tool_input}]
-                            if update.tool_name else [],
+                            tool_calls=(
+                                [{"name": update.tool_name, "input": update.tool_input}]
+                                if update.tool_name
+                                else []
+                            ),
                         )
                         try:
                             result = stream_callback(legacy_update)
@@ -343,10 +346,12 @@ class ClaudeIntegration:
                     if response.get("type") == "text":
                         content_parts.append(response.get("content", ""))
                     elif response.get("type") == "tool_use":
-                        tools_used.append({
-                            "name": response.get("tool_name"),
-                            "input": response.get("tool_input"),
-                        })
+                        tools_used.append(
+                            {
+                                "name": response.get("tool_name"),
+                                "input": response.get("tool_input"),
+                            }
+                        )
                     elif response.get("type") == "complete":
                         cost = response.get("cost", 0.0)
                         if response.get("session_id"):

@@ -176,14 +176,31 @@ ALLOWED_USERS=123456789  # Your Telegram user ID
 ### 5. Run the Bot
 
 ```bash
-# Start in debug mode
-make run-debug
+# Start bot from current directory (recommended)
+claude-telegram-bot
 
-# Or for production
-make run
+# Or with a specific project directory
+claude-telegram-bot --directory /path/to/project
+
+# Enable debug logging
+claude-telegram-bot --debug
+
+# Legacy: Using make commands
+make run-debug  # Debug mode
+make run        # Production
 ```
 
 🎉 **That's it!** Message your bot on Telegram to get started.
+
+#### CLI Options
+
+```bash
+claude-telegram-bot --help     # Show all options
+claude-telegram-bot --version  # Show version
+claude-telegram-bot -d /path   # Shorthand for --directory
+```
+
+The CLI automatically uses the current directory as the approved directory for file operations, making it easy to start the bot from any project.
 
 > 📋 **Detailed Setup Guide**: For comprehensive setup instructions including authentication options and troubleshooting, see [docs/setup.md](docs/setup.md)
 
