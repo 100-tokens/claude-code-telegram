@@ -1,5 +1,13 @@
 """Claude Code integration module."""
 
+# New modules - imported for registration
+from . import commands, conversation, hooks, tools
+from .agent_integration import AgentIntegration
+from .conversation import (
+    ConversationManager,
+    get_conversation_manager,
+    set_conversation_manager,
+)
 from .exceptions import (
     ClaudeError,
     ClaudeParsingError,
@@ -27,6 +35,7 @@ __all__ = [
     "ClaudeTimeoutError",
     # Main integration
     "ClaudeIntegration",
+    "AgentIntegration",
     # Core components
     "ClaudeProcessManager",
     "ClaudeResponse",
@@ -38,4 +47,13 @@ __all__ = [
     "ToolMonitor",
     "OutputParser",
     "ResponseFormatter",
+    # Conversation management
+    "ConversationManager",
+    "get_conversation_manager",
+    "set_conversation_manager",
+    # New modules
+    "tools",
+    "hooks",
+    "commands",
+    "conversation",
 ]

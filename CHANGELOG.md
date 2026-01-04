@@ -14,6 +14,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Recently Completed
 
+#### Claude Agent SDK Upgrade - 2026-01-04
+- **SDK Migration** (002-agent-sdk-upgrade):
+  - Upgraded from `claude-code-sdk` (0.0.11) to `claude-agent-sdk` (0.1.17)
+  - Python version requirement bumped from 3.9 to 3.10+
+  - New `AgentIntegration` class with bidirectional ClaudeSDKClient support
+  - SDK fallback mechanism for graceful degradation
+- **Custom Telegram Tools**:
+  - `telegram_keyboard` - Send inline keyboards with buttons
+  - `telegram_file` - Send files and documents
+  - `telegram_progress` - Show progress indicators
+  - `telegram_message` - Send formatted messages with parse mode
+  - Tool execution timeout handling (configurable via `tool_timeout_seconds`)
+- **Slash Command Support**:
+  - Slash command discovery from `.claude/commands/*.md`
+  - Template expansion with `$ARGUMENTS` substitution
+  - Sequential command execution queue to prevent race conditions
+  - Support for speckit and ralph workflows
+- **Security Hooks System**:
+  - PreToolUse hooks for Bash tool security enforcement
+  - Dangerous command pattern detection (rm -rf, chmod 777, git push --force)
+  - Permission decisions (deny, allow, askUser)
+  - Audit logging for blocked operations
+  - User confirmation flow for sensitive operations
+- **Bidirectional Session Management**:
+  - ConversationManager for stateful conversations
+  - Per-user ClaudeSDKClient lifecycle management
+  - Session interrupt capability via `/stop` command
+  - Integration with existing session storage
+  - Support for 50+ turn conversations
+
 #### Storage Layer Implementation (TODO-6) - 2025-06-06
 - **SQLite Database with Complete Schema**:
   - 7 core tables: users, sessions, messages, tool_usage, audit_log, user_tokens, cost_tracking

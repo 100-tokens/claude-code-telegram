@@ -89,12 +89,39 @@ class Settings(BaseSettings):
             "TodoRead",
             "TodoWrite",
             "WebSearch",
+            # Telegram tools (via MCP server)
+            "mcp__telegram__keyboard",
+            "mcp__telegram__file",
+            "mcp__telegram__progress",
+            "mcp__telegram__message",
         ],
         description="List of allowed Claude tools",
     )
     claude_disallowed_tools: Optional[List[str]] = Field(
         default=["git commit", "git push"],
         description="List of explicitly disallowed Claude tools/commands",
+    )
+
+    # Claude Agent SDK settings
+    permission_mode: str = Field(
+        default="acceptEdits",
+        description="SDK permission mode: acceptEdits, denyEdits, or bypassPermissions",
+    )
+    enable_telegram_tools: bool = Field(
+        default=True,
+        description="Enable custom Telegram tools (keyboard, file, progress, message)",
+    )
+    enable_security_hooks: bool = Field(
+        default=True,
+        description="Enable PreToolUse security hooks for dangerous pattern blocking",
+    )
+    enable_slash_commands: bool = Field(
+        default=True,
+        description="Enable slash command expansion from .claude/commands/",
+    )
+    tool_timeout_seconds: int = Field(
+        default=30,
+        description="Timeout for tool execution in seconds",
     )
 
     # Rate limiting

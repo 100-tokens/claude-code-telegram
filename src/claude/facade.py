@@ -1,6 +1,7 @@
 """High-level Claude Code integration facade.
 
 Provides simple interface for bot handlers.
+Supports both legacy SDK and new Agent SDK integration.
 """
 
 from pathlib import Path
@@ -9,6 +10,9 @@ from typing import Any, Callable, Dict, List, Optional, Union
 import structlog
 
 from ..config.settings import Settings
+from .agent_integration import AgentIntegration
+from .agent_integration import StreamUpdate as AgentStreamUpdate
+from .commands.executor import CommandExecutor, is_slash_command
 from .exceptions import ClaudeToolValidationError
 from .integration import ClaudeProcessManager, ClaudeResponse, StreamUpdate
 from .monitor import ToolMonitor
@@ -19,34 +23,74 @@ logger = structlog.get_logger()
 
 
 class ClaudeIntegration:
-    """Main integration point for Claude Code."""
+    """Main integration point for Claude Code.
+
+    Supports three execution modes:
+    1. AgentIntegration (new claude-agent-sdk) - preferred
+    2. ClaudeSDKManager (legacy claude-code-sdk) - fallback
+    3. ClaudeProcessManager (subprocess) - final fallback
+    """
 
     def __init__(
         self,
         config: Settings,
         process_manager: Optional[ClaudeProcessManager] = None,
         sdk_manager: Optional[ClaudeSDKManager] = None,
+        agent_integration: Optional[AgentIntegration] = None,
         session_manager: Optional[SessionManager] = None,
         tool_monitor: Optional[ToolMonitor] = None,
+        telegram_context: Optional[Any] = None,
     ):
-        """Initialize Claude integration facade."""
-        self.config = config
+        """Initialize Claude integration facade.
 
-        # Initialize both managers for fallback capability
+        Args:
+            config: Application settings
+            process_manager: Optional subprocess manager (legacy)
+            sdk_manager: Optional SDK manager (legacy claude-code-sdk)
+            agent_integration: Optional Agent integration (new claude-agent-sdk)
+            session_manager: Session management
+            tool_monitor: Tool monitoring and validation
+            telegram_context: Telegram context for custom tools
+        """
+        self.config = config
+        self.telegram_context = telegram_context
+
+        # Initialize new Agent SDK integration (preferred)
+        self.agent_integration = agent_integration or AgentIntegration(
+            config=config,
+            telegram_context=telegram_context,
+        )
+
+        # Initialize legacy managers for fallback capability
         self.sdk_manager = (
             sdk_manager or ClaudeSDKManager(config) if config.use_sdk else None
         )
         self.process_manager = process_manager or ClaudeProcessManager(config)
 
-        # Use SDK by default if configured
-        if config.use_sdk:
+        # Use Agent SDK by default if available, else legacy SDK, else subprocess
+        if self.agent_integration.is_sdk_available:
+            self.manager = self.agent_integration
+            logger.info(
+                "Using Agent SDK integration",
+                sdk_type=self.agent_integration.sdk_type,
+            )
+        elif config.use_sdk and self.sdk_manager:
             self.manager = self.sdk_manager
+            logger.info("Using legacy SDK manager")
         else:
             self.manager = self.process_manager
+            logger.info("Using subprocess manager")
 
         self.session_manager = session_manager
         self.tool_monitor = tool_monitor
         self._sdk_failed_count = 0  # Track SDK failures for adaptive fallback
+
+        # Initialize command executor for slash commands
+        self.command_executor = (
+            CommandExecutor(config.approved_directory / ".claude" / "commands")
+            if config.enable_slash_commands
+            else None
+        )
 
     async def run_command(
         self,
@@ -57,6 +101,36 @@ class ClaudeIntegration:
         on_stream: Optional[Callable[[StreamUpdate], None]] = None,
     ) -> ClaudeResponse:
         """Run Claude Code command with full integration."""
+        # Process slash commands if enabled
+        if self.command_executor and is_slash_command(prompt):
+            logger.info(
+                "Processing slash command",
+                user_id=user_id,
+                prompt_preview=prompt[:50],
+            )
+
+            result = await self.command_executor.process_message(prompt, user_id)
+
+            if result["error"]:
+                # Return error as ClaudeResponse
+                return ClaudeResponse(
+                    content=result["error"],
+                    session_id=session_id or "",
+                    cost=0.0,
+                    duration_ms=0,
+                    num_turns=0,
+                    is_error=True,
+                    error_type="command_error",
+                )
+
+            # Use expanded prompt
+            prompt = result["expanded_prompt"]
+            logger.info(
+                "Expanded slash command",
+                command=result["command"],
+                expanded_length=len(prompt),
+            )
+
         logger.info(
             "Running Claude command",
             user_id=user_id,
@@ -389,8 +463,13 @@ class ClaudeIntegration:
         """Shutdown integration and cleanup resources."""
         logger.info("Shutting down Claude integration")
 
-        # Kill any active processes
-        await self.manager.kill_all_processes()
+        # Close Agent SDK sessions
+        if self.agent_integration:
+            await self.agent_integration.close_all()
+
+        # Kill any active processes (legacy managers)
+        if hasattr(self.manager, "kill_all_processes"):
+            await self.manager.kill_all_processes()
 
         # Clean up expired sessions
         await self.cleanup_expired_sessions()

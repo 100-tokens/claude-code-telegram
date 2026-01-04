@@ -1,11 +1,22 @@
 """Claude Code subprocess management.
 
+DEPRECATED: This module is deprecated. Use agent_integration.py with claude-agent-sdk instead.
+This file is retained for backward compatibility during migration.
+
 Features:
 - Async subprocess execution
 - Stream handling
 - Timeout management
 - Error recovery
 """
+
+import warnings
+
+warnings.warn(
+    "integration module is deprecated, use agent_integration instead",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 import asyncio
 import json

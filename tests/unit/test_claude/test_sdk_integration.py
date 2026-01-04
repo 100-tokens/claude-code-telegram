@@ -5,10 +5,23 @@ from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
-from claude_code_sdk import ClaudeCodeOptions
+
+# Conditional import - SDK may not be available
+try:
+    from claude_code_sdk import ClaudeCodeOptions
+
+    SDK_AVAILABLE = True
+except ImportError:
+    ClaudeCodeOptions = None  # type: ignore
+    SDK_AVAILABLE = False
 
 from src.claude.sdk_integration import ClaudeResponse, ClaudeSDKManager, StreamUpdate
 from src.config.settings import Settings
+
+# Skip all tests if SDK not available
+pytestmark = pytest.mark.skipif(
+    not SDK_AVAILABLE, reason="claude_code_sdk not installed"
+)
 
 
 class TestClaudeSDKManager:
