@@ -1,0 +1,77 @@
+# PR-Agent / Qodo Merge Configuration
+# Documentation: https://qodo-merge-docs.qodo.ai/usage-guide/configuration_options/
+
+[config]
+# AI Model configuration - Gemini 3 Flash Preview via OpenRouter
+model = "openrouter/google/gemini-3-flash-preview"
+model_turbo = "openrouter/google/gemini-2.0-flash-001"
+fallback_models = ["openrouter/google/gemini-2.0-flash-001"]
+
+# Maximum tokens for model output (Gemini supports 1M context)
+max_model_tokens = 8192
+custom_model_max_tokens = 1000000
+
+[pr_reviewer]
+# Enable security-focused review (important for this project)
+require_security_review = true
+
+# Enable test coverage review
+require_tests_review = true
+
+# Number of code suggestions to provide
+num_code_suggestions = 4
+
+# Review effort estimation
+require_estimate_effort_to_review = true
+
+# Focus areas for this project
+extra_instructions = """
+Pay special attention to:
+1. Security: Authentication, input validation, path traversal, injection attacks
+2. Async patterns: Ensure proper async/await usage, no blocking I/O
+3. Directory sandboxing: All file operations must respect APPROVED_DIRECTORY
+4. Rate limiting: Check that rate limits are properly applied
+5. Error handling: User-friendly error messages with remediation suggestions
+"""
+
+[pr_description]
+# Automatically generate PR description
+publish_labels = true
+add_original_user_description = true
+generate_ai_title = true
+
+# Custom labels for this project
+custom_labels = [
+    "security",
+    "bot-core",
+    "claude-integration",
+    "telegram-handlers",
+    "testing",
+    "documentation"
+]
+
+[pr_code_suggestions]
+# Number of code improvement suggestions
+num_code_suggestions = 4
+
+# Focus on these aspects
+extra_instructions = """
+Prioritize suggestions for:
+- Security improvements
+- Async/await best practices
+- Error handling enhancements
+- Test coverage gaps
+"""
+
+[pr_improve]
+# Auto-apply safe suggestions
+auto_extended_mode = true
+
+[github_action_config]
+# Auto-run on PR creation
+auto_review = true
+auto_describe = true
+auto_improve = true
+
+# Enable PR commands via comments
+enable_comment_commands = true

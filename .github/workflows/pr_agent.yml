@@ -1,0 +1,49 @@
+# Qodo Merge / PR-Agent GitHub Action
+# Provides AI-powered PR reviews, descriptions, and suggestions
+# Documentation: https://qodo-merge-docs.qodo.ai
+# Model: Gemini 2.5 Flash Preview via OpenRouter
+
+name: PR Agent
+
+on:
+  pull_request:
+    types: [opened, reopened, ready_for_review]
+  issue_comment:
+    types: [created]
+
+jobs:
+  pr_agent_job:
+    # Skip if triggered by a bot to avoid loops
+    if: ${{ github.event.sender.type != 'Bot' }}
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+      pull-requests: write
+      contents: write
+    name: Run PR Agent
+    steps:
+      - name: PR Agent action step
+        id: pr_agent
+        uses: qodo-ai/pr-agent@main
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+          # Model configuration - Gemini 3 Flash Preview via OpenRouter
+          config.model: "openrouter/google/gemini-3-flash-preview"
+          config.model_turbo: "openrouter/google/gemini-2.0-flash-001"
+          config.fallback_models: '["openrouter/google/gemini-2.0-flash-001"]'
+
+          # Auto-run features on PR open
+          github_action_config.auto_review: "true"
+          github_action_config.auto_describe: "true"
+          github_action_config.auto_improve: "true"
+
+          # Review configuration
+          pr_reviewer.require_security_review: "true"
+          pr_reviewer.require_tests_review: "true"
+          pr_reviewer.num_code_suggestions: "4"
+
+          # Description configuration
+          pr_description.publish_labels: "true"
+          pr_description.add_original_user_description: "true"
