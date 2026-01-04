@@ -182,9 +182,11 @@ class Settings(BaseSettings):
     @field_validator("allowed_users", mode="before")
     @classmethod
     def parse_allowed_users(cls, v: Any) -> Optional[List[int]]:
-        """Parse comma-separated user IDs."""
+        """Parse comma-separated user IDs or single int."""
         if isinstance(v, str):
             return [int(uid.strip()) for uid in v.split(",") if uid.strip()]
+        if isinstance(v, int):
+            return [v]
         return v  # type: ignore[no-any-return]
 
     @field_validator("approved_directory")
