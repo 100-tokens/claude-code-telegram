@@ -5,7 +5,9 @@ inline keyboards, file attachments, progress updates, and formatted messages.
 """
 
 import contextvars
+import hashlib
 import io
+import time
 from typing import Any, Dict, List, Optional, Union
 
 import structlog
@@ -159,6 +161,21 @@ def get_telegram_context() -> Optional[TelegramToolContext]:
     return _current_context.get()
 
 
+def clear_telegram_context() -> None:
+    """Clear the current Telegram context after request completion.
+
+    Call this after finishing a request to prevent stale context.
+    """
+    _current_context.set(None)
+
+
+# Rate limiting for progress updates (minimum interval between edits)
+_last_progress_update: contextvars.ContextVar[float] = contextvars.ContextVar(
+    "last_progress_update", default=0.0
+)
+PROGRESS_UPDATE_INTERVAL = 1.0  # Minimum seconds between progress updates
+
+
 @register_tool(
     name="telegram_keyboard",
     description="Send an inline keyboard with clickable buttons to the user. Use this when you want to present options or choices.",
@@ -215,12 +232,19 @@ async def telegram_keyboard(
         from telegram import InlineKeyboardButton, InlineKeyboardMarkup
 
         keyboard = []
-        for row in buttons:
+        for row_idx, row in enumerate(buttons):
             keyboard_row = []
-            for btn_text in row:
-                # Ensure callback_data is within 64 bytes (Telegram limit)
-                # even with multi-byte characters like emojis
-                cb_data = btn_text.encode("utf-8")[:64].decode("utf-8", "ignore")
+            for btn_idx, btn_text in enumerate(row):
+                # Create unique callback_data using hash to handle:
+                # 1. Long button text (64-byte Telegram limit)
+                # 2. Similar/duplicate button labels
+                # Format: first 48 chars of text + 8-char hash suffix
+                text_hash = hashlib.md5(
+                    f"{row_idx}:{btn_idx}:{btn_text}".encode()
+                ).hexdigest()[:8]
+                # Truncate text part to leave room for hash
+                text_part = btn_text.encode("utf-8")[:55].decode("utf-8", "ignore")
+                cb_data = f"{text_part}#{text_hash}"
                 keyboard_row.append(
                     InlineKeyboardButton(btn_text, callback_data=cb_data)
                 )
@@ -379,6 +403,24 @@ async def telegram_progress(
     # Clamp percent to 0-100
     percent = max(0, min(100, percent))
 
+    # Rate limiting: skip update if too recent (prevent Telegram 429 errors)
+    current_time = time.time()
+    last_update = _last_progress_update.get()
+    time_since_update = current_time - last_update
+
+    # Allow update if: first update, 100% complete, or enough time elapsed
+    if last_update > 0 and percent < 100 and time_since_update < PROGRESS_UPDATE_INTERVAL:
+        logger.debug(
+            "Skipping progress update (rate limited)",
+            percent=percent,
+            seconds_since_last=time_since_update,
+        )
+        return {
+            "content": [
+                {"type": "text", "text": f"Progress: {percent}% (update skipped - rate limited)"}
+            ],
+        }
+
     # Create progress bar
     bar_length = 10
     filled = int(bar_length * percent / 100)
@@ -389,9 +431,11 @@ async def telegram_progress(
     try:
         if ctx and ctx.message_id:
             await ctx.edit_message(progress_text)
+            _last_progress_update.set(current_time)
             logger.info("Updated progress", percent=percent)
         elif ctx:
             await ctx.send_message(progress_text)
+            _last_progress_update.set(current_time)
             logger.info("Sent progress message", percent=percent)
         else:
             logger.warning("No context available, progress not updated")

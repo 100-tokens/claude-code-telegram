@@ -337,27 +337,14 @@ class AgentIntegration:
                 f"Query timed out after {self.config.claude_timeout_seconds}s"
             )
 
-        # Stream responses with tool timeout
+        # Stream responses from SDK
+        # Note: Tool execution timeouts are handled internally by the SDK
+        # via ClaudeAgentOptions configuration
         async for msg in client.receive_response():
-            # Apply tool timeout for tool executions
+            # Log tool usage for monitoring
             if hasattr(msg, "tool_use"):
-                try:
-                    await asyncio.wait_for(
-                        self._handle_tool_with_timeout(msg),
-                        timeout=self.config.tool_timeout_seconds,
-                    )
-                except asyncio.TimeoutError:
-                    logger.warning(
-                        "Tool execution timed out",
-                        user_id=user_id,
-                        timeout=self.config.tool_timeout_seconds,
-                    )
-                    yield {
-                        "type": "error",
-                        "content": f"Tool execution timed out after {self.config.tool_timeout_seconds}s",
-                        "error_type": "tool_timeout",
-                    }
-                    continue
+                tool_name = getattr(msg.tool_use, "name", "unknown")
+                logger.debug("Tool execution in progress", tool=tool_name, user_id=user_id)
 
             # Convert to dict format
             response = self._convert_message_to_dict(msg)
@@ -379,16 +366,6 @@ class AgentIntegration:
 
             if response:
                 yield response
-
-    async def _handle_tool_with_timeout(self, msg: Any) -> None:
-        """Handle tool execution with timeout.
-
-        Args:
-            msg: Message with tool use
-        """
-        # Placeholder for tool execution handling
-        # The actual tool execution is handled by the SDK
-        pass
 
     async def _query_code_sdk(
         self,

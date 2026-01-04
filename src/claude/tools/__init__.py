@@ -12,6 +12,7 @@ from .registry import (
 )
 from .telegram_tools import (
     TelegramToolContext,
+    clear_telegram_context,
     get_telegram_context,
     get_telegram_tools,
     set_telegram_context,
@@ -37,4 +38,5 @@ __all__ = [
     "TelegramToolContext",
     "set_telegram_context",
     "get_telegram_context",
+    "clear_telegram_context",
 ]
